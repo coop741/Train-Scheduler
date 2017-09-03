@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8">
+  <title>Train Schedule</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!--  <link rel="stylesheet" type="text/css" href="assets/css/resetCSS.css"> -->
+  <!-- Bootstrap CSS -->
+  <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css">
+  <!-- <link rel="stylesheet" type="text/css" href="assets/css/style.css"> -->
+
+  <!-- jQuery -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.2.1/jquery.min.js"></script>
+
+  
+  
+</head>
+
+<body>
+  <div class="container">
+    <div class="col-md-10" id="background">
+      <br>
+      <br>
+      <div class="jumbotron">
+       <h1 class="title">Train Scheduler</h1> 
+       <p>Serving Up 97% Customer Satisfaction since 1949</p> </div>
+
+
+      <div class="panel panel-primary" id="backgroundbox">
+       <div class="panel-heading" id="tableform">Current Train Schedule</div>
+        <div class="panel-body">
+          <div class="table-responsive">          
+            <table class="table">
+              <thead>
+                <tr>
+                  <th>Train Name</th>
+                  <th>Destination</th>
+                  <th>Frequency (min)</th>
+                  <th>Next Arrival</th>
+                  <th>Minutes Away</th>
+                </tr>
+              </thead>
+              <tbody id="trainSchedule">
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+  <br>
+
+  <div class="panel panel-primary" id="backgroundbox">
+   <div class="panel-heading" id="tableform">Add Train</div>
+   <div class="panel-body">
+
+     <form>
+      <div class="form-group">
+        <label for="name-input">Train Name</label>
+        <input type="text" class="form-control" id="name-input">
+      </div>
+      <div class="form-group">
+        <label for="destination-input">Destination</label>
+        <input type="text" class="form-control" id="destination-input">
+      </div>
+      <div class="form-group">
+        <label for="time-input">First Train Time (HH:mm- military time)</label>
+        <input type="time" class="form-control" id="time-input">
+      </div>
+      <div class="form-group">
+        <label for="frequency-input">Frequency (min)</label>
+        <input type="text" class="form-control" id="frequency-input">
+      </div>
+
+      <button id="submit" type="submit" class="btn btn-default">Submit</button>
+    </form>
+
+  </div>
+</div>
+</div>
+
+
+<script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.2.1/jquery.min.js"></script>
+<script type="text/javascript"></script>
+<script src="https://www.gstatic.com/firebasejs/4.3.0/firebase.js"></script>
+<script src="https://cdn.jsdelivr.net/momentjs/2.12.0/moment.min.js"></script>
+<script>
+  // Initialize Firebase
+    var config = {
+      apiKey: "AIzaSyAGFYg3UtMQ9QfF2OYUyJZ9AmchSY-zccY",
+      authDomain: "clickbutton-7f5da.firebaseapp.com",
+      databaseURL: "https://clickbutton-7f5da.firebaseio.com",
+      projectId: "clickbutton-7f5da",
+      storageBucket: "clickbutton-7f5da.appspot.com",
+      messagingSenderId: "673878686935"
+    };
+    firebase.initializeApp(config);
+
+  var database = firebase.database();
+
+  var name = "";
+  var destination = "";
+  var time = "0:00 AM";
+  var frequency = "";
+
+  var currentTime = moment();
+  var nextArrival = moment(time, 'LT');
+
+  //Submit user entered values by creating a new database entry
+  $("#submit").on("click", function(){
+
+    event.preventDefault();
+
+    name = $("#name-input").val().trim();
+    destination = $("#destination-input").val().trim();
+    time = $("#time-input").val().trim();
+    frequency = $("#frequency-input").val().trim();
+
+    database.ref().push({
+      name: name,
+      destination: destination,
+      time: time,
+      frequency: frequency
+    });
+
+  });
+
+  function calculateNextArrival(firstTrainTime, trainFrequency){
+
+    var logTimes = [];
+    var i = 0;
+    var lastCall = moment('21:00', 'LT');
+    var tempTime = moment(firstTrainTime, 'LT');
+    var run = true;
+
+    logTimes[i] = tempTime.format('LT').toString();
+    
+    //Before the last call, create all the valid train times based on the firstTrainTime
+    while(run) {
+      if ((lastCall.diff(tempTime, 'm')) > 0) {
+        logTimes[i] = tempTime.add(trainFrequency, 'm').format('LT').toString();
+        i++;
+      }
+      else {
+        run = false; 
+      }
+    }
+
+    //Now using the logTimes[], find when the next train arrival is based on when a user accesses the page
+    for (var x=0; x < logTimes.length; x++){
+      if (moment(logTimes[x], 'LT').diff(currentTime, 'm') < 0) {
+        nextArrival = logTimes[x+1];
+      }
+    }
+
+    //Edge case: If current time a user accesses the page is before the firstTrainTime or after the lastCall, set nextArrival to the firstTrainTime 
+    if((moment(nextArrival, 'LT').format('LT') == '12:00 AM')) {
+      nextArrival = logTimes[0];
+    }
+  }   
+
+
+  //
+  database.ref().on("child_added", function (childSnapshot) {
+    var firstTrainTime = childSnapshot.val().time;
+    var trainFrequency = childSnapshot.val().frequency;
+    
+    //Calculate next arrival time
+    calculateNextArrival(firstTrainTime, trainFrequency);
+
+    //Build the next row of the train schedule
+    $("#trainSchedule").append("<tr><td>" + childSnapshot.val().name +
+      "</td><td>" + childSnapshot.val().destination +
+      "</td><td>" + childSnapshot.val().frequency +
+      "</td><td>" + nextArrival +
+      "</td><td>" + moment(nextArrival, 'LT').diff(currentTime, 'm') +
+      "</td></tr>");
+    }, function(errorObject) {
+      console.log("The read failed: " + errorObject.code);
+
+  });
+
+
+</script>
+</body>
+</html>
